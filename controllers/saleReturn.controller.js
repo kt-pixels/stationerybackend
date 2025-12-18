@@ -1,51 +1,39 @@
 import Sale from "../models/Sale.model.js";
 import Product from "../models/Product.model.js";
 import SaleReturn from "../models/SaleReturn.model.js";
-import { generateNumber } from "../src/utils/generateNumber.js";
+import { generateNumber } from "../utils/generateNumber.js";
 
+/**
+ * RETURN SALE ITEM
+ * POST /api/sales/:saleId/return
+ */
 export const returnSaleItem = async (req, res) => {
   try {
     const { saleId } = req.params;
     const { productId, quantity, reason } = req.body;
 
-    // 🔍 Find Sale
     const sale = await Sale.findById(saleId).populate("items.product");
-    if (!sale) {
-      return res.status(404).json({ message: "Sale not found" });
-    }
+    if (!sale) return res.status(404).json({ message: "Sale not found" });
 
-    // 🔍 Check product exists in sale
-    const saleItem = sale.items.find(
-      (i) => i.product._id.toString() === productId
-    );
+    const item = sale.items.find((i) => i.product._id.toString() === productId);
 
-    if (!saleItem) {
+    if (!item || quantity > item.quantity) {
       return res.status(400).json({
-        message: "This product was not part of the sale",
+        message: "Invalid return quantity",
       });
     }
-
-    // ❌ Quantity validation
-    if (quantity > saleItem.quantity) {
-      return res.status(400).json({
-        message: "Return quantity exceeds sold quantity",
-      });
-    }
-
-    // 💰 Refund calculation
-    const refundAmount = saleItem.sellingPrice * quantity;
-    const profitReduction =
-      (saleItem.sellingPrice - saleItem.costPrice) * quantity;
 
     // 🔁 Stock back
     await Product.findByIdAndUpdate(productId, {
       $inc: { stock: quantity },
     });
 
-    // 🔢 Generate return number
+    const refundAmount = item.sellingPrice * quantity;
+    const profitLoss = (item.sellingPrice - item.costPrice) * quantity;
+
+    // 🔢 Save return record
     const returnNumber = await generateNumber("RET");
 
-    // 🧾 Save return record
     const saleReturn = await SaleReturn.create({
       returnNumber,
       sale: sale._id,
@@ -55,14 +43,12 @@ export const returnSaleItem = async (req, res) => {
       reason,
     });
 
-    // 🧮 Adjust sale totals
+    // 🧮 Adjust sale
     sale.totalAmount -= refundAmount;
-    sale.profit -= profitReduction;
+    sale.profit -= profitLoss;
+    item.quantity -= quantity;
 
-    saleItem.quantity -= quantity;
-
-    // Optional: remove item if qty becomes 0
-    if (saleItem.quantity === 0) {
+    if (item.quantity === 0) {
       sale.items = sale.items.filter(
         (i) => i.product._id.toString() !== productId
       );
@@ -76,6 +62,6 @@ export const returnSaleItem = async (req, res) => {
       data: saleReturn,
     });
   } catch (err) {
-    res.status(400).json({ message: err.message });
+    res.status(500).json({ message: err.message });
   }
 };

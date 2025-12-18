@@ -1,33 +1,31 @@
-// ==========================
-// src/controllers/sale.controller.js
-// ==========================
 import Sale from "../models/Sale.model.js";
 import Product from "../models/Product.model.js";
-
-import { generateNumber } from "../src/utils/generateNumber.js";
+import { generateNumber } from "../utils/generateNumber.js";
+import { addCredit } from "./creditor.controller.js";
 
 /**
- * @desc    Create sale (billing) + deduct stock + calculate profit
- * @route   POST /api/sales
+ * CREATE SALE
+ * POST /api/sales
  */
-
 export const createSale = async (req, res) => {
   try {
     const { items } = req.body;
-
     let profit = 0;
 
+    // 🔍 Validate stock & calculate profit
     for (const item of items) {
       const product = await Product.findById(item.product);
-      if (product.stock < item.quantity) {
+      if (!product || product.stock < item.quantity) {
         return res.status(400).json({
           success: false,
-          message: `Insufficient stock for ${product.name}`,
+          message: `Insufficient stock for ${product?.name}`,
         });
       }
-      profit += (item.sellingPrice - item.costPrice) * item.quantity;
+
+      profit += (item.sellingPrice - product.costPrice) * item.quantity;
     }
 
+    // 🔁 Deduct stock
     for (const item of items) {
       await Product.findByIdAndUpdate(item.product, {
         $inc: { stock: -item.quantity },
@@ -42,23 +40,28 @@ export const createSale = async (req, res) => {
       profit,
     });
 
+    if (req.body.paymentMode !== "Cash") {
+      await addCredit({
+        customerName: req.body.customerName,
+        amount: req.body.totalAmount,
+      });
+    }
+
     res.status(201).json({ success: true, data: sale });
   } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: err.message });
   }
 };
 
 /**
- * @desc    Get all sales
- * @route   GET /api/sales
+ * GET SALES
+ * GET /api/sales
  */
 export const getAllSales = async (req, res) => {
   try {
-    let { from, to } = req.query;
-
+    const { from, to } = req.query;
     const filter = {};
 
-    // ✅ DEFAULT = TODAY
     if (!from && !to) {
       const start = new Date();
       start.setHours(0, 0, 0, 0);
@@ -69,7 +72,6 @@ export const getAllSales = async (req, res) => {
       filter.saleDate = { $gte: start, $lte: end };
     }
 
-    // 📅 CUSTOM DATE RANGE
     if (from && to) {
       filter.saleDate = {
         $gte: new Date(from),
@@ -88,8 +90,8 @@ export const getAllSales = async (req, res) => {
 };
 
 /**
- * @desc    Get single sale
- * @route   GET /api/sales/:id
+ * GET SINGLE SALE
+ * GET /api/sales/:id
  */
 export const getSaleById = async (req, res) => {
   try {
@@ -106,50 +108,5 @@ export const getSaleById = async (req, res) => {
     res.json({ success: true, data: sale });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
-  }
-};
-
-/**
- * @desc    Return sale item (partial/full)
- * @route   POST /api/sales/:id/return
- */
-export const returnSaleItem = async (req, res) => {
-  try {
-    const { productId, quantity } = req.body;
-
-    const sale = await Sale.findById(req.params.id);
-    if (!sale) {
-      return res.status(404).json({ message: "Sale not found" });
-    }
-
-    const item = sale.items.find((i) => i.product.toString() === productId);
-
-    if (!item || item.quantity < quantity) {
-      return res.status(400).json({ message: "Invalid return quantity" });
-    }
-
-    // Update stock
-    await Product.findByIdAndUpdate(productId, {
-      $inc: { stock: quantity },
-    });
-
-    // Update sale item
-    item.quantity -= quantity;
-
-    // Recalculate totals
-    const refundAmount = quantity * item.sellingPrice;
-    const profitLoss = quantity * (item.sellingPrice - item.costPrice);
-
-    sale.totalAmount -= refundAmount;
-    sale.profit -= profitLoss;
-
-    // Remove item if qty becomes 0
-    sale.items = sale.items.filter((i) => i.quantity > 0);
-
-    await sale.save();
-
-    res.json({ success: true, data: sale });
-  } catch (err) {
-    res.status(500).json({ message: err.message });
   }
 };
