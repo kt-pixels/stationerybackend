@@ -1,6 +1,6 @@
 import Sale from "../models/Sale.model.js";
 import Product from "../models/Product.model.js";
-import { generateNumber } from "../utils/generateNumber.js";
+import { generateNumber } from "../src/utils/generateNumber.js";
 import { addCredit } from "./creditor.controller.js";
 
 /**
