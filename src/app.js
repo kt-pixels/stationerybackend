@@ -10,7 +10,7 @@ import purchaseRoutes from "../routes/purchase.routes.js";
 import saleRoutes from "../routes/sale.routes.js";
 import expenseRoutes from "../routes/expense.routes.js";
 import dashboardRoutes from "../routes/dashboard.routes.js";
-import creditorRoutes from "./src/routes/creditor.routes.js";
+import creditorRoutes from "../routes/creditor.routes.js";
 
 const app = express();
 
