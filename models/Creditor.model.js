@@ -2,6 +2,13 @@ import mongoose from "mongoose";
 
 const creditorSchema = new mongoose.Schema(
   {
+    sales: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Sale",
+      },
+    ],
+
     customerName: {
       type: String,
       required: true,

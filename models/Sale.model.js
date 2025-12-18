@@ -67,12 +67,22 @@ const saleSchema = new mongoose.Schema(
     },
     paymentMode: {
       type: String,
-      enum: ["Cash", "UPI", "Card"],
+      enum: ["Cash", "UPI", "Card", "Credit"],
       required: true,
     },
     saleDate: {
       type: Date,
       default: Date.now,
+    },
+    paymentStatus: {
+      type: String,
+      enum: ["PAID", "UNPAID"],
+      default: "PAID",
+    },
+
+    dueAmount: {
+      type: Number,
+      default: 0,
     },
   },
   { timestamps: true }

@@ -46,24 +46,27 @@ export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    let user = await User.findOne({ email }).select("+password");
+    // 🔍 Find user
+    const user = await User.findOne({ email }).select("+password");
 
-    // ✅ IF USER DOES NOT EXIST → AUTO REGISTER
+    // ❌ USER NOT FOUND
     if (!user) {
-      user = await User.create({
-        name: "Shop Owner",
-        email,
-        password,
-        role: "OWNER",
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
       });
-    } else {
-      // ✅ IF USER EXISTS → CHECK PASSWORD
-      const isMatch = await user.comparePassword(password);
-      if (!isMatch)
-        return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    // ✅ ALWAYS RETURN TOKEN
+    // ❌ PASSWORD WRONG
+    const isMatch = await user.comparePassword(password);
+    if (!isMatch) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid email or password",
+      });
+    }
+
+    // ✅ LOGIN SUCCESS
     res.json({
       success: true,
       token: generateToken(user),
@@ -75,6 +78,10 @@ export const login = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({
+      success: false,
+      message: "Server error during login",
+    });
   }
 };
